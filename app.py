@@ -6,8 +6,13 @@ import numpy as np
 from tensorflow.keras.models import load_model
 from yt_dlp import YoutubeDL
 
-# Load the trained Siamese model
-model = load_model('siamese_model.h5')
+# Load the model with custom objects (if needed)
+model = load_model('siamese_model.h5', custom_objects=None)
+
+# Save the model in TensorFlow's SavedModel format
+model.save('saved_model/')
+model = load_model('saved_model/')
+
 
 # Get the streaming URL from a YouTube video ID
 def get_youtube_stream_url(video_id):
