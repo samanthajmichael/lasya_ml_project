@@ -3,11 +3,69 @@ import cv2
 import os
 import tempfile
 import numpy as np
-from tensorflow.keras.models import load_model
+from dotenv import load_dotenv
+from huggingface_hub import hf_hub_download
+from huggingface_hub import login
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense, Lambda
+from tensorflow.keras.models import Model
 from yt_dlp import YoutubeDL
 
-# Load the trained Siamese model
-model = load_model('siamese_model.h5')
+
+
+load_dotenv()
+token = os.getenv('HUGGING_FACE_HUB_TOKEN')
+login(token=token)
+
+def build_siamese_model(input_shape):
+    # Define the base network
+    input = Input(shape=input_shape)
+    x = Conv2D(32, (3, 3), activation='relu', padding='same')(input)
+    x = MaxPooling2D((2, 2))(x)
+    x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
+    x = MaxPooling2D((2, 2))(x)
+    x = Conv2D(128, (3, 3), activation='relu', padding='same')(x)
+    x = MaxPooling2D((2, 2))(x)
+    x = Flatten()(x)
+    x = Dense(128, activation='relu')(x)
+    model = Model(input, x)
+    return model
+
+try:
+    # Input shape of flow images
+    input_shape = (224, 224, 3)
+
+    # Create the base network
+    base_network = build_siamese_model(input_shape)
+
+    # Define the two inputs
+    input_a = Input(shape=input_shape)
+    input_b = Input(shape=input_shape)
+
+    # Pass the inputs through the shared base network
+    processed_a = base_network(input_a)
+    processed_b = base_network(input_b)
+
+    # Compute the distance between embeddings
+    distance = Lambda(lambda tensors: tf.math.abs(tensors[0] - tensors[1]))([processed_a, processed_b])
+    output = Dense(1, activation='sigmoid')(distance)
+
+    # Create the Siamese model
+    siamese_model = Model([input_a, input_b], output)
+    siamese_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+    # Download and load weights
+    model_path = hf_hub_download(
+        repo_id="samanthajmichael/siamese_model.h5",
+        filename="siamese_model.h5"
+    )
+    
+    # Load weights into the model
+    siamese_model.load_weights(model_path)
+    st.success("Model loaded successfully!")
+
+except Exception as e:
+    st.error(f"Error loading model: {str(e)}")
 
 # Get the streaming URL from a YouTube video ID
 def get_youtube_stream_url(video_id):
@@ -68,7 +126,9 @@ if frames:
     frame_indices = list(range(len(frames)))
     selected_frame_index = st.slider("Select a frame index:", min_value=0, max_value=len(frames) - 1, value=0)
     selected_frame = frames[selected_frame_index]
-    st.image(selected_frame, caption="Selected Reference Frame", use_column_width=True)
+    st.image(selected_frame, caption="Selected Reference Frame", use_container_width=True)
+
+    model = build_siamese_model(input_shape)
 
     # Perform similarity analysis
     st.write("Finding similar frames...")
@@ -77,4 +137,4 @@ if frames:
     # Display similar frames
     st.write("Top Similar Frames:")
     for rank, (frame_idx, similarity) in enumerate(top_matches, 1):
-        st.image(frames[frame_idx], caption=f"Match {rank} - Similarity Score: {similarity:.2f}", use_column_width=True)
+        st.image(frames[frame_idx], caption=f"Match {rank} - Similarity Score: {similarity:.2f}", use_container_width=True)
