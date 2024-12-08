@@ -11,8 +11,6 @@ from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Flatten, Dense,
 from tensorflow.keras.models import Model
 from yt_dlp import YoutubeDL
 
-
-
 load_dotenv()
 token = os.getenv('HUGGING_FACE_HUB_TOKEN')
 login(token=token)
